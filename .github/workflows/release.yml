@@ -1,0 +1,100 @@
+# Erstellt bei jedem Merge auf main automatisch ein Release, sobald die Version in load.php neu ist.
+# Tag und Release entstehen über die GitHub-API auf dem Commit von main, ohne manuellen Tag-Push.
+# Die Version kommt aus load.php (MLAB_License_Client_Registry::add); das ZIP enthält genau das, was bin/sync-to.sh kopiert.
+# Der Release-Text kommt aus dem Abschnitt der Version in CHANGELOG.md; fehlt er, bricht der Lauf ab.
+name: Release
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Version aus load.php lesen
+        id: version
+        run: |
+          set -euo pipefail
+          VERSION=$(grep -oE "add\( '[0-9.]+'" load.php | grep -oE '[0-9.]+' || true)
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Keine eindeutige Version in load.php gefunden (MLAB_License_Client_Registry::add). Gefunden: '$VERSION'"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Prüfen, ob dieses Release schon existiert
+        id: exists
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          if gh release view "v$VERSION" >/dev/null 2>&1; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Changelog-Abschnitt lesen
+        if: steps.exists.outputs.skip == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; if ($2 == v) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > "$RUNNER_TEMP/notes.md"
+          if [ ! -s "$RUNNER_TEMP/notes.md" ]; then
+            echo "::error::CHANGELOG.md hat keinen Abschnitt '## $VERSION'. Bitte Eintrag ergänzen."
+            exit 1
+          fi
+
+      - name: ZIP bauen und prüfen
+        if: steps.exists.outputs.skip == 'false'
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          NAME=mlab-license-client
+          ZIP="$GITHUB_WORKSPACE/$NAME-$VERSION.zip"
+          STAGE="$RUNNER_TEMP/stage"
+          mkdir -p "$STAGE/$NAME"
+
+          # Dieselben Teile wie bin/sync-to.sh. Tests, vendor und Composer-Dateien bleiben draussen.
+          cp -r load.php src languages LICENSE "$STAGE/$NAME/"
+          (cd "$STAGE" && zip -qr "$ZIP" "$NAME")
+
+          unzip -Z1 "$ZIP" > "$RUNNER_TEMP/zip-list.txt"
+          if ! grep -qx "$NAME/load.php" "$RUNNER_TEMP/zip-list.txt"; then
+            echo "::error::Im ZIP fehlt $NAME/load.php"
+            exit 1
+          fi
+          if grep -vE '/$' "$RUNNER_TEMP/zip-list.txt" | grep -vqE "^$NAME/(load\.php|LICENSE|src/.+|languages/.+)$"; then
+            echo "::error::ZIP enthält Dateien, die nicht zu bin/sync-to.sh gehören:"
+            grep -vE '/$' "$RUNNER_TEMP/zip-list.txt" | grep -vE "^$NAME/(load\.php|LICENSE|src/.+|languages/.+)$"
+            exit 1
+          fi
+          TOP=$(cut -d/ -f1 "$RUNNER_TEMP/zip-list.txt" | sort -u)
+          if [ "$TOP" != "$NAME" ]; then
+            echo "::error::ZIP hat nicht genau einen Ordner oben namens $NAME: $TOP"
+            exit 1
+          fi
+
+      - name: Release auf GitHub erstellen
+        if: steps.exists.outputs.skip == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          set -euo pipefail
+          gh release create "v$VERSION" "$GITHUB_WORKSPACE/mlab-license-client-$VERSION.zip" \
+            --target "$GITHUB_SHA" \
+            --title "MomentumLab License Client $VERSION" \
+            --notes-file "$RUNNER_TEMP/notes.md"

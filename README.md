@@ -68,6 +68,10 @@ Paid features get their own unlock slug without a download, for example `mlab-se
 
 `load.php` registers the version of the copy (`MLAB_License_Client_Registry::add( 'x.y.z', … )`) and must stay backwards compatible. Classes live in `MomentumLab\LicenseClient\V1`; a breaking change needs a new namespace.
 
+## Releases
+
+Merging to `main` with a new version in `load.php` creates the GitHub release `v<version>` with the ZIP `mlab-license-client-<version>.zip` automatically. The release notes are the section of that version in `CHANGELOG.md`; without it the workflow fails. An existing release is skipped.
+
 ## Development
 
 ```bash

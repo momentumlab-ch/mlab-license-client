@@ -50,6 +50,14 @@ Constants in `wp-config.php` (optional):
 - `MLAB_LICENSE_KEY`: fixes the key; the form is locked.
 - `MLAB_LICENSE_SERVER_URL`: other server, for tests only.
 
+## Refresh route
+
+`POST /wp-json/mlab-license/v1/refresh` (since 1.1.0) lets the license server ask a site to re-check its license at once. The route is public but only triggers the same check as `refresh( true )`:
+
+- It runs at most once per 60 seconds (option `mlab_license_ping_at`); further calls in that window do nothing.
+- Without a license key it does nothing.
+- The response is always `{ "ok": true }`: no state, no products, no key, no errors. It unlocks nothing; only the answer of the license server does.
+
 Keys stored by older versions of MomentumLab Core (`mlab_core_license_key`) or MomentumLab SEO (`mlab_seo_license`) are taken over once.
 
 ## Products on the license server

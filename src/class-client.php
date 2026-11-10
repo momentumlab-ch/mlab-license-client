@@ -24,6 +24,7 @@ final class Client {
 	private const TIMEOUT      = 5;
 	private const DEFAULT_URL  = 'https://momentumlab.ch';
 	private const OPTION_PING  = 'mlab_license_ping_at';
+	private const CRON_PING    = 'mlab_license_ping_refresh';
 
 	/**
 	 * State memoised for this request.
@@ -47,6 +48,14 @@ final class Client {
 		add_action( 'admin_init', array( $this, 'schedule' ) );
 		add_action( 'admin_init', array( $this, 'adopt_legacy_key' ) );
 		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+		add_action( self::CRON_PING, array( $this, 'refresh_now' ) );
+	}
+
+	/**
+	 * Re-check without cache, used by the delayed check after a throttled ping.
+	 */
+	public function refresh_now(): void {
+		$this->refresh( true );
 	}
 
 	/**
@@ -71,14 +80,22 @@ final class Client {
 		if ( '' === $this->key() ) {
 			return array( 'ok' => true );
 		}
-		$now = time();
-		if ( ! State::ping_allowed( get_option( self::OPTION_PING, null ), $now ) ) {
+		$now  = time();
+		$last = get_option( self::OPTION_PING, null );
+		if ( ! State::ping_allowed( $last, $now ) ) {
+			// A second change within the interval must not get lost: check again once the interval is over.
+			if ( false === wp_next_scheduled( self::CRON_PING ) ) {
+				wp_schedule_single_event( (int) $last + State::PING_INTERVAL, self::CRON_PING );
+			}
 			return array( 'ok' => true );
 		}
 		update_option( self::OPTION_PING, $now, false );
 		$this->in_refresh_route = true;
-		$this->refresh( true );
-		$this->in_refresh_route = false;
+		try {
+			$this->refresh( true );
+		} finally {
+			$this->in_refresh_route = false;
+		}
 		return array( 'ok' => true );
 	}
 

@@ -16,13 +16,14 @@ defined( 'ABSPATH' ) || exit;
  */
 final class Client {
 
-	public const VERSION = '1.0.0';
+	public const VERSION = '1.1.0';
 
 	private const OPTION_KEY   = 'mlab_license_key';
 	private const OPTION_STATE = 'mlab_license_state';
 	private const CRON         = 'mlab_license_refresh';
 	private const TIMEOUT      = 5;
 	private const DEFAULT_URL  = 'https://momentumlab.ch';
+	private const OPTION_PING  = 'mlab_license_ping_at';
 
 	/**
 	 * State memoised for this request.
@@ -32,12 +33,53 @@ final class Client {
 	private ?array $state = null;
 
 	/**
+	 * True only while the refresh route runs, because REST requests are not admin requests.
+	 *
+	 * @var bool
+	 */
+	private bool $in_refresh_route = false;
+
+	/**
 	 * Registers cron and the one-time takeover of keys stored by older plugin versions.
 	 */
 	public function hooks(): void {
 		add_action( self::CRON, array( $this, 'refresh' ) );
 		add_action( 'admin_init', array( $this, 'schedule' ) );
 		add_action( 'admin_init', array( $this, 'adopt_legacy_key' ) );
+		add_action( 'rest_api_init', array( $this, 'register_routes' ) );
+	}
+
+	/**
+	 * Registers POST mlab-license/v1/refresh. It only triggers a re-check and never returns data.
+	 */
+	public function register_routes(): void {
+		register_rest_route(
+			'mlab-license/v1',
+			'/refresh',
+			array(
+				'methods'             => 'POST',
+				'callback'            => array( $this, 'handle_refresh_route' ),
+				'permission_callback' => '__return_true',
+			)
+		);
+	}
+
+	/**
+	 * Route callback: a throttled re-check. The answer is always just { "ok": true }.
+	 */
+	public function handle_refresh_route(): array {
+		if ( '' === $this->key() ) {
+			return array( 'ok' => true );
+		}
+		$now = time();
+		if ( ! State::ping_allowed( get_option( self::OPTION_PING, null ), $now ) ) {
+			return array( 'ok' => true );
+		}
+		update_option( self::OPTION_PING, $now, false );
+		$this->in_refresh_route = true;
+		$this->refresh( true );
+		$this->in_refresh_route = false;
+		return array( 'ok' => true );
 	}
 
 	/**
@@ -219,7 +261,7 @@ final class Client {
 	 * Requests only where a slow server cannot slow down visitors.
 	 */
 	private function may_request(): bool {
-		return is_admin() || wp_doing_cron() || ( defined( 'WP_CLI' ) && WP_CLI );
+		return $this->in_refresh_route || is_admin() || wp_doing_cron() || ( defined( 'WP_CLI' ) && WP_CLI );
 	}
 
 	/**

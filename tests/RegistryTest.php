@@ -11,7 +11,7 @@ final class RegistryTest extends TestCase {
 	}
 
 	public function test_registers_itself_and_hooks_boot(): void {
-		$this->assertSame( '1.0.0', MLAB_License_Client_Registry::newest() );
+		$this->assertSame( '1.1.0', MLAB_License_Client_Registry::newest() );
 		$this->assertContains( array( 'plugins_loaded', 'mlab_license', 0 ), $GLOBALS['mlab_test_actions'] );
 	}
 

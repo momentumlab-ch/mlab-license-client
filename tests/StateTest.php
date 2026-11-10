@@ -82,4 +82,22 @@ final class StateTest extends TestCase {
 		$this->assertSame( State::NONE, $state['status'] );
 		$this->assertSame( array(), $state['products'] );
 	}
+
+	public function test_ping_allowed_without_stored_value(): void {
+		$this->assertTrue( State::ping_allowed( null, self::NOW ) );
+		$this->assertTrue( State::ping_allowed( false, self::NOW ) );
+		$this->assertTrue( State::ping_allowed( '', self::NOW ) );
+		$this->assertTrue( State::ping_allowed( 0, self::NOW ) );
+	}
+
+	public function test_ping_is_throttled_to_one_per_minute(): void {
+		$this->assertFalse( State::ping_allowed( self::NOW, self::NOW ) );
+		$this->assertFalse( State::ping_allowed( self::NOW - 59, self::NOW ) );
+		$this->assertTrue( State::ping_allowed( self::NOW - 60, self::NOW ) );
+		$this->assertTrue( State::ping_allowed( (string) ( self::NOW - 61 ), self::NOW ) );
+	}
+
+	public function test_ping_in_the_future_is_throttled(): void {
+		$this->assertFalse( State::ping_allowed( self::NOW + 30, self::NOW ) );
+	}
 }

@@ -1,0 +1,26 @@
+{
+	"name": "momentumlab-ch/mlab-license-client",
+	"description": "Shared license client for MomentumLab WordPress plugins: one key per website, newest bundled copy wins.",
+	"license": "GPL-2.0-or-later",
+	"type": "library",
+	"require": {
+		"php": ">=8.0"
+	},
+	"require-dev": {
+		"phpunit/phpunit": "^9.6",
+		"wp-coding-standards/wpcs": "^3.1",
+		"dealerdirect/phpcodesniffer-composer-installer": "^1.0"
+	},
+	"config": {
+		"allow-plugins": {
+			"dealerdirect/phpcodesniffer-composer-installer": true
+		},
+		"platform": {
+			"php": "8.0.30"
+		}
+	},
+	"scripts": {
+		"test": "phpunit",
+		"lint": "phpcs"
+	}
+}

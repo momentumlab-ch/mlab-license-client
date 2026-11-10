@@ -1,0 +1,48 @@
+<?xml version="1.0"?>
+<!--
+PHPCS-Konfiguration für ein WordPress-Plugin oder -Theme.
+Aufruf: vendor/bin/phpcs  (oder phpcs, wenn global installiert)
+-->
+<ruleset name="mlab-license-client">
+	<description>WordPress Coding Standards für mlab-license-client.</description>
+
+	<file>.</file>
+	<exclude-pattern>lib/*</exclude-pattern>
+	<exclude-pattern>vendor/*</exclude-pattern>
+	<exclude-pattern>node_modules/*</exclude-pattern>
+	<exclude-pattern>languages/*</exclude-pattern>
+	<exclude-pattern>tests/*</exclude-pattern>
+
+	<arg name="extensions" value="php" />
+	<arg name="colors" />
+	<arg name="parallel" value="8" />
+
+	<config name="testVersion" value="8.0-" />
+	<config name="minimum_supported_wp_version" value="6.4" />
+
+	<rule ref="WordPress" />
+
+	<!-- Class files use hyphenated names (class-license-key.php) for readability. -->
+	<rule ref="WordPress.Files.FileName.NotHyphenatedLowercase">
+		<exclude-pattern>src/class-*.php</exclude-pattern>
+	</rule>
+	<rule ref="WordPress.Files.FileName.InvalidClassFileName">
+		<exclude-pattern>src/class-*.php</exclude-pattern>
+	</rule>
+
+	<rule ref="WordPress.WP.I18n">
+		<properties>
+			<property name="text_domain" type="array">
+				<element value="mlab-license-client" />
+			</property>
+		</properties>
+	</rule>
+
+	<!-- load.php must stay one self-contained file: an old copy of it may be loaded first on a site. -->
+	<rule ref="WordPress.Files.FileName.InvalidClassFileName">
+		<exclude-pattern>load.php</exclude-pattern>
+	</rule>
+	<rule ref="Universal.Files.SeparateFunctionsFromOO.Mixed">
+		<exclude-pattern>load.php</exclude-pattern>
+	</rule>
+</ruleset>
